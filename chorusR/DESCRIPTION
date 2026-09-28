@@ -1,0 +1,24 @@
+Package: chorusR
+Title: R Wrappers Around the 'chorus' Genomic Oracle Toolkit
+Version: 0.0.1
+Authors@R: person("Vincent", "Carey", email = "stvjc@channing.harvard.edu",
+    role = c("aut", "cre"))
+Description: Thin R wrappers that drive the Python 'chorus' package
+    (<https://github.com/pinellolab/chorus>) via system2() calls into its
+    per-oracle conda/mamba environments, rather than an in-process bridge
+    such as 'reticulate'. Each oracle's forward pass runs isolated in its
+    own environment already (this is how chorus itself works), so shelling
+    out to a script and reading back a CSV is a natural fit and avoids
+    tying the R session's process to a specific Python environment.
+    Currently wraps two oracles: AlphaGenome and Cherimoya (CATv1), both
+    via mQTL chromatin-concordance scoring scripts shipped in the chorus
+    repository.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+Imports:
+    utils
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.1.0
