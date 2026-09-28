@@ -80,6 +80,16 @@ AlphaGenome's JAX backend cannot run on pre-Ampere GPUs (Tesla T4,
 V100, P100, RTX 20-series) -- see the chorus repo's
 \code{CHORUS_RESOURCES_SUMMARY.md} for the underlying \code{ALG_DOT_BF16_BF16_F32}
 error. \code{device} defaults to \code{"cpu"} for that reason.
+
+A second, unrelated GPU failure mode shows up on virtualized/cloud GPU
+instances (observed on a Jetstream2/Exosphere \code{exouser@...gpu} host,
+2026-09-28): \verb{Device 0 does not support CUDA Virtual Memory Management (VMM). VMM is required for device memory allocation in XLA.}, from
+JAX's CUDA backend. This is not a jaxlib version or config problem --
+modern XLA's CUDA backend requires the GPU driver to expose CUDA's VMM
+API, and some GPU-passthrough virtualization layers do not forward
+that capability to the guest even when the underlying hardware
+supports it. There is no software workaround; \code{device = "cpu"} is the
+only option on such a host.
 }
 \examples{
 # Requires the CHORUS_REPO_DIR environment variable to point at a

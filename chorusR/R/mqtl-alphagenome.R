@@ -13,6 +13,17 @@
 #' `CHORUS_RESOURCES_SUMMARY.md` for the underlying `ALG_DOT_BF16_BF16_F32`
 #' error. `device` defaults to `"cpu"` for that reason.
 #'
+#' A second, unrelated GPU failure mode shows up on virtualized/cloud GPU
+#' instances (observed on a Jetstream2/Exosphere `exouser@...gpu` host,
+#' 2026-09-28): `Device 0 does not support CUDA Virtual Memory Management
+#' (VMM). VMM is required for device memory allocation in XLA.`, from
+#' JAX's CUDA backend. This is not a jaxlib version or config problem --
+#' modern XLA's CUDA backend requires the GPU driver to expose CUDA's VMM
+#' API, and some GPU-passthrough virtualization layers do not forward
+#' that capability to the guest even when the underlying hardware
+#' supports it. There is no software workaround; `device = "cpu"` is the
+#' only option on such a host.
+#'
 #' @param mqtl_csv Path to a CSV of SNP-CpG pairs. Required columns:
 #'   `chrom`, `snp_pos`, `ref`, `alt`, `cpg_pos`, `beta`. Optional:
 #'   `mqtl_id`, `gene_symbol`. See `alphagenome4mqtl.md` for the exact
