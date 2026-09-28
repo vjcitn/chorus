@@ -1,33 +1,81 @@
-test_that(".build_mamba_run_call assembles the mamba/conda invocation", {
-  call <- .build_mamba_run_call("score_mqtls.py", c("in.csv", "-o", "out.csv"))
-  expect_equal(call$command, "mamba")
+test_that(".build_python_call assembles the direct-python invocation", {
+  call <- .build_python_call("/opt/conda/envs/chorus/bin/python",
+                              "score_mqtls.py", c("in.csv", "-o", "out.csv"))
+  expect_equal(call$command, "/opt/conda/envs/chorus/bin/python")
+  expect_equal(call$args, c("-u", "score_mqtls.py", "in.csv", "-o", "out.csv"))
+})
+
+test_that(".build_python_call validates its inputs", {
+  expect_error(.build_python_call(c("a", "b"), "s.py", "x"))
+  expect_error(.build_python_call("py", c("a", "b"), "x"))
+})
+
+test_that(".list_mamba_envs parses names and paths", {
+  local_mocked_bindings(
+    system2 = function(...) {
+      c(
+        "# conda environments:",
+        "#",
+        "base                     /opt/conda",
+        "chorus                *  /opt/conda/envs/chorus",
+        "chorus-alphagenome       /opt/conda/envs/chorus-alphagenome"
+      )
+    },
+    .package = "base"
+  )
+  envs <- .list_mamba_envs("mamba")
+  expect_equal(envs$name, c("base", "chorus", "chorus-alphagenome"))
   expect_equal(
-    call$args,
-    c("run", "--no-capture-output", "-n", "chorus", "python", "-u",
-      "score_mqtls.py", "in.csv", "-o", "out.csv")
+    envs$path,
+    c("/opt/conda", "/opt/conda/envs/chorus", "/opt/conda/envs/chorus-alphagenome")
   )
 })
 
-test_that(".build_mamba_run_call respects mamba_env and mamba_bin", {
-  call <- .build_mamba_run_call("s.py", "x", mamba_env = "myenv",
-                                 mamba_bin = "conda")
-  expect_equal(call$command, "conda")
-  expect_equal(call$args[1:4], c("run", "--no-capture-output", "-n", "myenv"))
+test_that(".list_mamba_envs errors clearly when the env list command fails", {
+  local_mocked_bindings(
+    system2 = function(...) {
+      out <- character(0)
+      attr(out, "status") <- 1L
+      out
+    },
+    .package = "base"
+  )
+  expect_error(.list_mamba_envs("mamba"), "env list' failed")
 })
 
-test_that(".build_mamba_run_call puts --no-capture-output before -n", {
-  # `mamba run -n <env> --no-capture-output ...` dies with
-  # "exec: --: invalid option" -- the flag must come first.
-  call <- .build_mamba_run_call("s.py", "x")
-  expect_equal(which(call$args == "--no-capture-output"),
-               which(call$args == "run") + 1)
-  expect_true(which(call$args == "--no-capture-output") <
-                which(call$args == "-n"))
+test_that(".resolve_env_python finds the interpreter for an existing environment", {
+  tmp <- tempfile()
+  dir.create(file.path(tmp, "bin"), recursive = TRUE)
+  file.create(file.path(tmp, "bin", "python"))
+  local_mocked_bindings(
+    .list_mamba_envs = function(...) {
+      data.frame(name = "chorus", path = tmp, stringsAsFactors = FALSE)
+    }
+  )
+  expect_equal(
+    .resolve_env_python("chorus", "mamba"),
+    file.path(tmp, "bin", "python")
+  )
 })
 
-test_that(".build_mamba_run_call validates its inputs", {
-  expect_error(.build_mamba_run_call(c("a", "b"), "x"))
-  expect_error(.build_mamba_run_call("s.py", "x", mamba_env = 1))
+test_that(".resolve_env_python errors clearly when the environment does not exist", {
+  local_mocked_bindings(
+    .list_mamba_envs = function(...) {
+      data.frame(name = "base", path = "/opt/conda", stringsAsFactors = FALSE)
+    }
+  )
+  expect_error(.resolve_env_python("chorus-nope", "mamba"), "does not exist")
+})
+
+test_that(".resolve_env_python errors clearly when the python binary is missing", {
+  tmp <- tempfile()
+  dir.create(tmp)
+  local_mocked_bindings(
+    .list_mamba_envs = function(...) {
+      data.frame(name = "chorus", path = tmp, stringsAsFactors = FALSE)
+    }
+  )
+  expect_error(.resolve_env_python("chorus", "mamba"), "is not there")
 })
 
 test_that("chorus_repo_dir resolves from the chorusR.repo_dir option", {
@@ -177,6 +225,9 @@ test_that(".run_chorus_script skips the preflight check when check_env = FALSE",
     .check_mamba_env = function(...) stop("preflight check should not run")
   )
   local_mocked_bindings(
+    .resolve_env_python = function(...) "/opt/conda/envs/chorus/bin/python"
+  )
+  local_mocked_bindings(
     system2 = function(command, args, stdout, stderr, ...) {
       writeLines("ok", stdout)
       0L
@@ -188,10 +239,31 @@ test_that(".run_chorus_script skips the preflight check when check_env = FALSE",
   )
   expect_equal(run$status, 0L)
   expect_equal(run$stdout, "ok")
+  expect_equal(run$command, "/opt/conda/envs/chorus/bin/python")
+})
+
+test_that(".run_chorus_script runs the environment's python directly, not mamba run", {
+  local_mocked_bindings(.check_mamba_env = function(...) TRUE)
+  local_mocked_bindings(
+    .resolve_env_python = function(...) "/opt/conda/envs/chorus/bin/python"
+  )
+  local_mocked_bindings(
+    system2 = function(command, args, stdout, stderr, ...) {
+      writeLines("ok", stdout)
+      0L
+    },
+    .package = "base"
+  )
+  run <- suppressMessages(.run_chorus_script("s.py", "x"))
+  expect_equal(run$command, "/opt/conda/envs/chorus/bin/python")
+  expect_equal(run$args, c("-u", "s.py", "x"))
 })
 
 test_that(".run_chorus_script writes a live log file the caller can tail", {
   local_mocked_bindings(.check_mamba_env = function(...) TRUE)
+  local_mocked_bindings(
+    .resolve_env_python = function(...) "/opt/conda/envs/chorus/bin/python"
+  )
   local_mocked_bindings(
     system2 = function(command, args, stdout, stderr, ...) {
       writeLines("ok", stdout)
@@ -244,6 +316,9 @@ test_that(".read_mqtl_results reads a well-formed CSV without warning", {
 
 test_that(".run_chorus_script warns (but does not error) on a nonzero exit status", {
   local_mocked_bindings(.check_mamba_env = function(...) TRUE)
+  local_mocked_bindings(
+    .resolve_env_python = function(...) "/opt/conda/envs/chorus/bin/python"
+  )
   local_mocked_bindings(
     system2 = function(command, args, stdout, stderr, ...) {
       writeLines(c("Traceback (most recent call last):", "ModuleNotFoundError"), stdout)

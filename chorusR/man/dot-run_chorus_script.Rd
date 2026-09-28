@@ -20,7 +20,7 @@
 
 \item{mamba_env}{Name of the conda/mamba environment to run the script
 in. Defaults to \code{"chorus"} (the base environment); see
-\code{\link[=.build_mamba_run_call]{.build_mamba_run_call()}}.}
+\code{\link[=.resolve_env_python]{.resolve_env_python()}}.}
 
 \item{mamba_bin}{Name or path of the mamba/conda executable.}
 
@@ -44,11 +44,16 @@ itself).
 Redirects the child's combined stdout+stderr to \code{log_file} on disk
 rather than capturing it only in memory, and only after the script
 exits. Long chorus scoring runs (each row can be a multi-minute model
-forward pass) print progress as they go -- see
-\code{\link[=.build_mamba_run_call]{.build_mamba_run_call()}} for how that reaches the log file
-unbuffered -- and writing straight to disk means that progress is
-visible (\verb{tail -f log_file} from another terminal) and preserved even
-if this R session is killed while \code{system2()} is still blocked on the
-child.
+forward pass) print progress as they go -- see \code{\link[=.build_python_call]{.build_python_call()}}
+for how that reaches the log file unbuffered -- and writing straight
+to disk means that progress is visible (\verb{tail -f log_file} from
+another terminal) and preserved even if this R session is killed
+while \code{system2()} is still blocked on the child.
+}
+\details{
+Runs the target environment's \code{python} interpreter directly (see
+\code{\link[=.resolve_env_python]{.resolve_env_python()}}) rather than through \verb{mamba run}/\verb{conda run},
+whose wrapper script generation has proven unreliable across
+mamba/conda versions.
 }
 \keyword{internal}

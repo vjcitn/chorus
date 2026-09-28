@@ -63,46 +63,108 @@ chorus_repo_dir <- function() {
   normalizePath(path, mustWork = TRUE)
 }
 
-#' Build the command-line invocation for a chorus mamba-run script call
+#' List conda/mamba environments, with their names and install paths
+#'
+#' Shared parsing for [.check_mamba_env()] and [.resolve_env_python()], both
+#' of which need `mamba env list`'s output -- one just the names, the other
+#' also the install path.
+#'
+#' @param mamba_bin Name or path of the mamba/conda executable.
+#' @return A data frame with columns `name` and `path`.
+#' @keywords internal
+.list_mamba_envs <- function(mamba_bin = "mamba") {
+  envs <- suppressWarnings(
+    system2(mamba_bin, c("env", "list"), stdout = TRUE, stderr = TRUE)
+  )
+  status <- attr(envs, "status")
+  if (!is.null(status) && status != 0L) {
+    stop(
+      "'", mamba_bin, " env list' failed (exit status ", status, "):\n",
+      paste(envs, collapse = "\n"),
+      call. = FALSE
+    )
+  }
+
+  # Each non-comment, non-blank line is "<name>  [*]  <path>"; strip the
+  # active-env marker before taking the first token as the name and the
+  # last as the path.
+  lines <- envs[!grepl("^\\s*#", envs) & nzchar(trimws(envs))]
+  tokens <- lapply(strsplit(trimws(lines), "\\s+"), function(x) x[nzchar(x)])
+  tokens <- tokens[lengths(tokens) > 0]
+  data.frame(
+    name = vapply(tokens, `[`, character(1), 1),
+    path = vapply(tokens, function(x) x[length(x)], character(1)),
+    stringsAsFactors = FALSE
+  )
+}
+
+#' Resolve the python interpreter inside a conda/mamba environment
+#'
+#' chorusR used to invoke scripts via `mamba run -n <env> ...`, but that
+#' wrapper's shell-script generation has, on different mamba/conda
+#' versions and installs, produced a broken `exec -- ...` line -- bash's
+#' `exec` builtin does not treat `--` as an end-of-options marker the way
+#' most other commands do, so it fails with `exec: --: invalid option`
+#' regardless of where `--no-capture-output` is placed on the `mamba run`
+#' command line. Resolving and invoking the environment's own `python`
+#' binary directly sidesteps `mamba run`'s wrapper entirely: the
+#' interpreter's own path is enough to make it use that environment's
+#' site-packages, without needing full shell activation.
+#'
+#' @param mamba_env Name of the conda/mamba environment.
+#' @param mamba_bin Name or path of the mamba/conda executable.
+#' @return Path to that environment's `python` executable.
+#' @keywords internal
+.resolve_env_python <- function(mamba_env = "chorus", mamba_bin = "mamba") {
+  envs <- .list_mamba_envs(mamba_bin)
+  match <- envs[envs$name == mamba_env, , drop = FALSE]
+  if (!nrow(match)) {
+    stop(
+      "conda/mamba environment '", mamba_env, "' does not exist. ",
+      "Available environments: ", paste(envs$name, collapse = ", "), ". ",
+      "Set up the chorus environments first (see the chorus repository's ",
+      "README/CLAUDE.md), or pass mamba_env= to point at the right one.",
+      call. = FALSE
+    )
+  }
+  python_bin <- file.path(match$path[1], "bin", "python")
+  if (!file.exists(python_bin)) {
+    stop(
+      "Expected a python executable at '", python_bin, "' for conda/mamba ",
+      "environment '", mamba_env, "', but it is not there.",
+      call. = FALSE
+    )
+  }
+  python_bin
+}
+
+#' Build the command-line invocation to run a chorus script directly
 #'
 #' Pure argument assembly, factored out of [.run_chorus_script()] so it can
 #' be unit-tested without a mamba/conda installation or a Python
-#' interpreter present.
+#' interpreter present. `-u` (unbuffered) defeats Python's own stdout
+#' buffering when it isn't attached to a terminal (as it isn't here,
+#' invoked via `system2()`), so progress prints reach `log_file` as they
+#' happen rather than only once the script exits.
 #'
+#' @param python_bin Path to the python interpreter inside the target
+#'   conda/mamba environment; see [.resolve_env_python()].
 #' @param script Path to the Python script to run.
 #' @param script_args Character vector of arguments to pass to the script.
-#' @param mamba_env Name of the conda/mamba environment to run the script
-#'   in (chorus isolates each oracle's dependencies per environment; the
-#'   mQTL-scoring scripts themselves only need the base environment
-#'   because they call oracles with `use_environment=True`, which spawns
-#'   the oracle-specific environment as a subprocess internally).
-#' @param mamba_bin Name or path of the mamba/conda executable.
-#' `--no-capture-output` (which must come before `-n`, not after -- `mamba
-#' run -n <env> --no-capture-output ...` dies with `exec: --: invalid
-#' option`) and `python -u` (unbuffered) together defeat two layers of
-#' output buffering that would otherwise silently hide progress until the
-#' whole script exits: `mamba run`/`conda run` buffer the child's stdout
-#' by default, and Python itself buffers stdout when it isn't attached to
-#' a terminal (as it isn't here, invoked via `system2()`).
 #'
 #' @return A list with `command` (the executable to run) and `args`
 #'   (character vector of arguments), suitable for passing to
 #'   [base::system2()] as `command` and `args`.
 #' @keywords internal
-.build_mamba_run_call <- function(script,
-                                   script_args,
-                                   mamba_env = "chorus",
-                                   mamba_bin = "mamba") {
+.build_python_call <- function(python_bin, script, script_args) {
   stopifnot(
+    is.character(python_bin), length(python_bin) == 1,
     is.character(script), length(script) == 1,
-    is.character(script_args),
-    is.character(mamba_env), length(mamba_env) == 1,
-    is.character(mamba_bin), length(mamba_bin) == 1
+    is.character(script_args)
   )
   list(
-    command = mamba_bin,
-    args = c("run", "--no-capture-output", "-n", mamba_env,
-              "python", "-u", script, script_args)
+    command = python_bin,
+    args = c("-u", script, script_args)
   )
 }
 
@@ -129,29 +191,13 @@ chorus_repo_dir <- function() {
     )
   }
 
-  envs <- suppressWarnings(
-    system2(mamba_bin, c("env", "list"), stdout = TRUE, stderr = TRUE)
-  )
-  status <- attr(envs, "status")
-  if (!is.null(status) && status != 0L) {
-    stop(
-      "'", mamba_bin, " env list' failed (exit status ", status, "):\n",
-      paste(envs, collapse = "\n"),
-      call. = FALSE
-    )
-  }
+  envs <- .list_mamba_envs(mamba_bin)
 
-  # Each non-comment, non-blank line is "<name>  [*]  <path>"; strip the
-  # active-env marker before taking the first token as the env name.
-  lines <- envs[!grepl("^\\s*#", envs) & nzchar(trimws(envs))]
-  names <- vapply(strsplit(trimws(lines), "\\s+"), `[`, character(1), 1)
-  names <- names[nzchar(names)]
-
-  if (!mamba_env %in% names) {
+  if (!mamba_env %in% envs$name) {
     stop(
       "conda/mamba environment '", mamba_env, "' does not exist. ",
       "Available environments: ",
-      paste(names, collapse = ", "), ". ",
+      paste(envs$name, collapse = ", "), ". ",
       "Set up the chorus environments first (see the chorus repository's ",
       "README/CLAUDE.md), or pass mamba_env= to point at the right one.",
       call. = FALSE
@@ -166,18 +212,22 @@ chorus_repo_dir <- function() {
 #' Redirects the child's combined stdout+stderr to `log_file` on disk
 #' rather than capturing it only in memory, and only after the script
 #' exits. Long chorus scoring runs (each row can be a multi-minute model
-#' forward pass) print progress as they go -- see
-#' [.build_mamba_run_call()] for how that reaches the log file
-#' unbuffered -- and writing straight to disk means that progress is
-#' visible (`tail -f log_file` from another terminal) and preserved even
-#' if this R session is killed while `system2()` is still blocked on the
-#' child.
+#' forward pass) print progress as they go -- see [.build_python_call()]
+#' for how that reaches the log file unbuffered -- and writing straight
+#' to disk means that progress is visible (`tail -f log_file` from
+#' another terminal) and preserved even if this R session is killed
+#' while `system2()` is still blocked on the child.
+#'
+#' Runs the target environment's `python` interpreter directly (see
+#' [.resolve_env_python()]) rather than through `mamba run`/`conda run`,
+#' whose wrapper script generation has proven unreliable across
+#' mamba/conda versions.
 #'
 #' @param script Path to the Python script to run.
 #' @param script_args Character vector of arguments to pass to the script.
 #' @param mamba_env Name of the conda/mamba environment to run the script
 #'   in. Defaults to `"chorus"` (the base environment); see
-#'   [.build_mamba_run_call()].
+#'   [.resolve_env_python()].
 #' @param mamba_bin Name or path of the mamba/conda executable.
 #' @param log_file Path to write the child's combined stdout+stderr to,
 #'   live, as it runs. Defaults to a fresh temp file; pass a stable path
@@ -202,7 +252,8 @@ chorus_repo_dir <- function() {
     .check_mamba_env(mamba_env, mamba_bin)
   }
 
-  call <- .build_mamba_run_call(script, script_args, mamba_env, mamba_bin)
+  python_bin <- .resolve_env_python(mamba_env, mamba_bin)
+  call <- .build_python_call(python_bin, script, script_args)
 
   message(
     "chorus script log: ", log_file,
