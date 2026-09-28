@@ -208,6 +208,40 @@ test_that(".run_chorus_script writes a live log file the caller can tail", {
   expect_equal(readLines(log_file), "ok")
 })
 
+test_that(".read_mqtl_results returns NULL without a warning on nonzero status", {
+  run <- list(status = 1L, log_file = tempfile())
+  expect_null(.read_mqtl_results(tempfile(), run))
+})
+
+test_that(".read_mqtl_results warns and returns NULL on status 0 but a missing file", {
+  run <- list(status = 0L, log_file = tempfile())
+  expect_warning(
+    res <- .read_mqtl_results(tempfile(fileext = ".csv"), run),
+    "missing or empty"
+  )
+  expect_null(res)
+})
+
+test_that(".read_mqtl_results warns and returns NULL on status 0 but an empty file", {
+  out <- tempfile(fileext = ".csv")
+  file.create(out)
+  run <- list(status = 0L, log_file = tempfile())
+  expect_warning(
+    res <- .read_mqtl_results(out, run),
+    "missing or empty"
+  )
+  expect_null(res)
+})
+
+test_that(".read_mqtl_results reads a well-formed CSV without warning", {
+  out <- tempfile(fileext = ".csv")
+  utils::write.csv(data.frame(mqtl_id = "a", x = 1), out, row.names = FALSE)
+  run <- list(status = 0L, log_file = tempfile())
+  res <- .read_mqtl_results(out, run)
+  expect_true(is.data.frame(res))
+  expect_equal(res$mqtl_id, "a")
+})
+
 test_that(".run_chorus_script warns (but does not error) on a nonzero exit status", {
   local_mocked_bindings(.check_mamba_env = function(...) TRUE)
   local_mocked_bindings(

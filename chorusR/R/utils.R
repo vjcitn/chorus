@@ -237,3 +237,50 @@ chorus_repo_dir <- function() {
     log_file = log_file
   )
 }
+
+#' Read back a chorus script's results CSV, without crashing on a bad file
+#'
+#' A `run$status` of `0` from [.run_chorus_script()] is not by itself proof
+#' that `output` holds a valid, non-empty results table: `mamba run`/`conda
+#' run` are known to occasionally mis-report a wrapped process's exit code
+#' (see this package's parent repository's CLAUDE.md), and a long scoring
+#' run that is OOM-killed or otherwise dies mid-write can leave a
+#' zero-byte or header-only CSV behind despite that. Reading such a file
+#' with [utils::read.csv()] directly raises a generic, unhelpful
+#' `"no lines available in input"` error. This wraps that read so a bad
+#' file instead produces `NULL` results and a warning that points at
+#' `run$log_file` for diagnosis.
+#'
+#' @param output Path to the results CSV written by the chorus script.
+#' @param run The list returned by [.run_chorus_script()].
+#' @return A data frame of results, or `NULL` if `output` does not exist,
+#'   is empty, or could not be parsed as CSV.
+#' @keywords internal
+.read_mqtl_results <- function(output, run) {
+  if (!identical(run$status, 0L)) {
+    return(NULL)
+  }
+  if (!file.exists(output) || file.info(output)$size == 0) {
+    warning(
+      "chorus script exited with status 0 but '", output, "' is missing ",
+      "or empty -- the underlying run likely died partway through (e.g. ",
+      "killed for memory) without that being reflected in the exit code. ",
+      "Check the log for what actually happened: ", run$log_file,
+      call. = FALSE
+    )
+    return(NULL)
+  }
+  results <- tryCatch(
+    utils::read.csv(output, stringsAsFactors = FALSE),
+    error = function(e) {
+      warning(
+        "chorus script exited with status 0, but '", output, "' could not ",
+        "be read as CSV (", conditionMessage(e), "). Check the log: ",
+        run$log_file,
+        call. = FALSE
+      )
+      NULL
+    }
+  )
+  results
+}

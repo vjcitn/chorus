@@ -88,7 +88,9 @@ test_that("run_cherimoya_mqtl passes --resume only when requested", {
     }
   )
 
-  run_cherimoya_mqtl(tmp_csv, resume = TRUE, repo_dir = tmp_repo)
+  suppressWarnings(
+    run_cherimoya_mqtl(tmp_csv, resume = TRUE, repo_dir = tmp_repo)
+  )
   expect_true("--resume" %in% captured)
 })
 
@@ -111,7 +113,9 @@ test_that("run_cherimoya_mqtl passes --device only when supplied", {
     }
   )
 
-  run_cherimoya_mqtl(tmp_csv, device = "cuda", repo_dir = tmp_repo)
+  suppressWarnings(
+    run_cherimoya_mqtl(tmp_csv, device = "cuda", repo_dir = tmp_repo)
+  )
   expect_true("--device" %in% captured)
   expect_equal(captured[which(captured == "--device") + 1], "cuda")
 })

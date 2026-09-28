@@ -83,10 +83,7 @@ run_alphagenome_mqtl <- function(mqtl_csv,
   run <- .run_chorus_script(script, args, mamba_env = mamba_env,
                              mamba_bin = mamba_bin)
 
-  results <- NULL
-  if (identical(run$status, 0L) && file.exists(output)) {
-    results <- utils::read.csv(output, stringsAsFactors = FALSE)
-  }
+  results <- .read_mqtl_results(output, run)
 
   list(
     status = run$status,

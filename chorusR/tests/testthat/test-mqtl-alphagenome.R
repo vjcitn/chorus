@@ -74,7 +74,9 @@ test_that("run_alphagenome_mqtl passes --resume only when requested", {
     }
   )
 
-  run_alphagenome_mqtl(tmp_csv, resume = TRUE, repo_dir = tmp_repo)
+  suppressWarnings(
+    run_alphagenome_mqtl(tmp_csv, resume = TRUE, repo_dir = tmp_repo)
+  )
   expect_true("--resume" %in% captured)
 })
 
