@@ -36,6 +36,7 @@ import numpy as np
 import pandas as pd
 
 import chorus
+from chorus.utils import get_genome
 from chorus.core.result import score_variant_effect
 from chorus.analysis.normalization import get_pertrack_normalizer
 from chorus.oracles.cherimoya_source.catv1_globals import CATV1_INPUT_LENGTH
@@ -196,6 +197,7 @@ def main():
           f"{[(a, e) for a, e, _ in tracks]}", flush=True)
 
     norm = get_pertrack_normalizer("cherimoya")
+    genome_path = get_genome("hg38")
 
     if args.resume:
         done_keys = load_existing_keys(args.output, ["mqtl_id", "track_id"])
@@ -216,7 +218,10 @@ def main():
     for assay, encode_id, biosample in tracks:
         print(f"\n=== {assay} {encode_id} ({biosample}) ===", flush=True)
         oracle = chorus.create_oracle(
-            "cherimoya", use_environment=True, device=args.device
+            "cherimoya",
+            use_environment=True,
+            reference_fasta=str(genome_path),
+            device=args.device,
         )
         oracle.load_pretrained_model(assay=assay, encode_id=encode_id)
         track_id = oracle.track_id
