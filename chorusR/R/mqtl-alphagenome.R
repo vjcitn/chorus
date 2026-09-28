@@ -27,6 +27,12 @@
 #' @param cell_types Character vector of AlphaGenome cell-type labels to
 #'   score against; `NULL` (default) uses the script's built-in default
 #'   panel (monocyte, CD4+/CD8+ T cell, B cell, neutrophil, PBMC).
+#' @param resume Logical; if `TRUE` and `output` already has rows (e.g.
+#'   from a run that was interrupted), skip mqtl_ids already scored there
+#'   and append only the rest, instead of overwriting `output` from
+#'   scratch. Only useful with a stable (non-default, non-tempfile)
+#'   `output` path, since a resumed run needs to find the same file the
+#'   earlier run wrote to.
 #' @param repo_dir Chorus repository checkout; defaults to
 #'   [chorus_repo_dir()].
 #' @param mamba_env Conda/mamba environment to run the script in; default
@@ -36,8 +42,15 @@
 #'
 #' @return A list with `status` (integer exit code from the script),
 #'   `log` (character vector of the script's combined stdout/stderr, for
-#'   troubleshooting a nonzero `status`), `output` (path to the results
-#'   CSV), and `results` (that CSV read in as a data frame, or `NULL` if
+#'   troubleshooting a nonzero `status`), `log_file` (path to that same
+#'   log on disk, written live as the script runs -- each mQTL is scored
+#'   in a separate multi-minute model call, so `tail -f log_file` from
+#'   another terminal shows progress in real time, and the file survives
+#'   even if this R session is interrupted), `output` (path to the
+#'   results CSV, itself written incrementally one mQTL at a time rather
+#'   than only at the end, so a crash or interrupt only loses the row in
+#'   progress -- rerun with `resume = TRUE` to pick up where it left
+#'   off), and `results` (that CSV read in as a data frame, or `NULL` if
 #'   the script did not exit successfully).
 #' @export
 #' @examples
@@ -51,6 +64,7 @@ run_alphagenome_mqtl <- function(mqtl_csv,
                                   flip_beta = FALSE,
                                   device = "cpu",
                                   cell_types = NULL,
+                                  resume = FALSE,
                                   repo_dir = chorus_repo_dir(),
                                   mamba_env = "chorus",
                                   mamba_bin = "mamba") {
@@ -64,6 +78,7 @@ run_alphagenome_mqtl <- function(mqtl_csv,
             "--device", device)
   if (isTRUE(flip_beta)) args <- c(args, "--flip-beta")
   if (!is.null(cell_types)) args <- c(args, "--cell-types", cell_types)
+  if (isTRUE(resume)) args <- c(args, "--resume")
 
   run <- .run_chorus_script(script, args, mamba_env = mamba_env,
                              mamba_bin = mamba_bin)
@@ -76,6 +91,7 @@ run_alphagenome_mqtl <- function(mqtl_csv,
   list(
     status = run$status,
     log = run$stdout,
+    log_file = run$log_file,
     output = output,
     results = results
   )

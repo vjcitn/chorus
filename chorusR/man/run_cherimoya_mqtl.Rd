@@ -12,6 +12,7 @@ run_cherimoya_mqtl(
   biosamples = NULL,
   assays = NULL,
   save_bedgraph = NULL,
+  resume = FALSE,
   repo_dir = chorus_repo_dir(),
   mamba_env = "chorus",
   mamba_bin = "mamba"
@@ -46,6 +47,13 @@ mqtl's full-resolution ref/alt predicted signal as BedGraph files
 there (one pair per mqtl x track) via the script's
 \code{--save-bedgraph} option. Off by default.}
 
+\item{resume}{Logical; if \code{TRUE} and \code{output} already has rows (e.g.
+from a run that was interrupted), skip (mqtl_id, track_id) pairs
+already scored there and append only the rest, instead of
+overwriting \code{output} from scratch. Only useful with a stable
+(non-default, non-tempfile) \code{output} path, since a resumed run needs
+to find the same file the earlier run wrote to.}
+
 \item{repo_dir}{Chorus repository checkout; defaults to
 \code{\link[=chorus_repo_dir]{chorus_repo_dir()}}.}
 
@@ -58,9 +66,17 @@ environment as a subprocess via \code{use_environment=True}).}
 \value{
 A list with \code{status} (integer exit code from the script),
 \code{log} (character vector of the script's combined stdout/stderr,
-including any window-filter or track-resolution warnings), \code{output}
-(path to the results CSV), and \code{results} (that CSV read in as a data
-frame, or \code{NULL} if the script did not exit successfully).
+including any window-filter or track-resolution warnings), \code{log_file}
+(path to that same log on disk, written live as the script runs --
+Cherimoya loads one track/biosample at a time and scores every mQTL
+against it before moving to the next, so \verb{tail -f log_file} from
+another terminal shows progress in real time, and the file survives
+even if this R session is interrupted), \code{output} (path to the
+results CSV, itself written incrementally one (mqtl, track) pair at
+a time rather than only at the end, so a crash or interrupt only
+loses the row in progress -- rerun with \code{resume = TRUE} to pick up
+where it left off), and \code{results} (that CSV read in as a data frame,
+or \code{NULL} if the script did not exit successfully).
 }
 \description{
 Wraps \code{score_mqtls_cherimoya.py} (in the chorus repository root): for

@@ -38,7 +38,7 @@ test_that("run_cherimoya_mqtl builds the expected script call and reads results 
       captured <<- list(script = script, args = script_args)
       utils::write.csv(fake_results, tmp_out, row.names = FALSE)
       list(status = 0L, stdout = "ok", stderr = character(0),
-           command = mamba_bin, args = script_args)
+           command = mamba_bin, args = script_args, log_file = tempfile())
     }
   )
 
@@ -65,6 +65,31 @@ test_that("run_cherimoya_mqtl builds the expected script call and reads results 
   # device is NULL by default for Cherimoya (no bf16 constraint), so
   # --device should not appear unless the caller asks for it.
   expect_false("--device" %in% captured$args)
+  expect_false("--resume" %in% captured$args)
+  expect_false(is.null(res$log_file))
+})
+
+test_that("run_cherimoya_mqtl passes --resume only when requested", {
+  tmp_csv <- tempfile(fileext = ".csv")
+  writeLines(c("chrom,snp_pos,ref,alt,cpg_pos,beta",
+               "chr1,100,A,G,105,0.3"), tmp_csv)
+
+  tmp_repo <- tempfile()
+  dir.create(tmp_repo)
+  dir.create(file.path(tmp_repo, "chorus"))
+  file.create(file.path(tmp_repo, "score_mqtls_cherimoya.py"))
+
+  captured <- NULL
+  local_mocked_bindings(
+    .run_chorus_script = function(script, script_args, ...) {
+      captured <<- script_args
+      list(status = 0L, stdout = "ok", stderr = character(0),
+           command = "mamba", args = script_args, log_file = tempfile())
+    }
+  )
+
+  run_cherimoya_mqtl(tmp_csv, resume = TRUE, repo_dir = tmp_repo)
+  expect_true("--resume" %in% captured)
 })
 
 test_that("run_cherimoya_mqtl passes --device only when supplied", {

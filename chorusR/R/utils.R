@@ -77,6 +77,14 @@ chorus_repo_dir <- function() {
 #'   because they call oracles with `use_environment=True`, which spawns
 #'   the oracle-specific environment as a subprocess internally).
 #' @param mamba_bin Name or path of the mamba/conda executable.
+#' `--no-capture-output` (which must come before `-n`, not after -- `mamba
+#' run -n <env> --no-capture-output ...` dies with `exec: --: invalid
+#' option`) and `python -u` (unbuffered) together defeat two layers of
+#' output buffering that would otherwise silently hide progress until the
+#' whole script exits: `mamba run`/`conda run` buffer the child's stdout
+#' by default, and Python itself buffers stdout when it isn't attached to
+#' a terminal (as it isn't here, invoked via `system2()`).
+#'
 #' @return A list with `command` (the executable to run) and `args`
 #'   (character vector of arguments), suitable for passing to
 #'   [base::system2()] as `command` and `args`.
@@ -93,7 +101,8 @@ chorus_repo_dir <- function() {
   )
   list(
     command = mamba_bin,
-    args = c("run", "-n", mamba_env, "python", script, script_args)
+    args = c("run", "--no-capture-output", "-n", mamba_env,
+              "python", "-u", script, script_args)
   )
 }
 
@@ -154,61 +163,77 @@ chorus_repo_dir <- function() {
 
 #' Run a chorus Python script via system2() and capture its output
 #'
+#' Redirects the child's combined stdout+stderr to `log_file` on disk
+#' rather than capturing it only in memory, and only after the script
+#' exits. Long chorus scoring runs (each row can be a multi-minute model
+#' forward pass) print progress as they go -- see
+#' [.build_mamba_run_call()] for how that reaches the log file
+#' unbuffered -- and writing straight to disk means that progress is
+#' visible (`tail -f log_file` from another terminal) and preserved even
+#' if this R session is killed while `system2()` is still blocked on the
+#' child.
+#'
 #' @param script Path to the Python script to run.
 #' @param script_args Character vector of arguments to pass to the script.
 #' @param mamba_env Name of the conda/mamba environment to run the script
 #'   in. Defaults to `"chorus"` (the base environment); see
 #'   [.build_mamba_run_call()].
 #' @param mamba_bin Name or path of the mamba/conda executable.
-#' @param stdout,stderr Passed through to [base::system2()]; default
-#'   `TRUE` for both, which per `system2()`'s own semantics merges stderr
-#'   into the captured stdout character vector (so `stderr` in the
-#'   returned value is always empty in that default case).
+#' @param log_file Path to write the child's combined stdout+stderr to,
+#'   live, as it runs. Defaults to a fresh temp file; pass a stable path
+#'   to keep it around after the call returns.
 #' @param check_env Logical; run [.check_mamba_env()] first. Default
 #'   `TRUE`; set `FALSE` only if the caller already checked (or is a test
 #'   that wants to bypass it).
-#' @return A list with `status` (integer exit code), `stdout` (character
-#'   vector, combined stdout+stderr by default), `stderr` (character
-#'   vector, only populated if `stderr` was given as a file path rather
-#'   than `TRUE`), `command`, and `args` (the invocation actually run,
-#'   useful for debugging a failure).
+#' @return A list with `status` (integer exit code), `stdout` (the
+#'   contents of `log_file`, read back in as a character vector once the
+#'   script exits), `stderr` (always empty; stderr is merged into
+#'   `log_file`/`stdout`), `command`, `args` (the invocation actually
+#'   run, useful for debugging a failure), and `log_file` (the path
+#'   itself).
 #' @keywords internal
 .run_chorus_script <- function(script,
                                 script_args,
                                 mamba_env = "chorus",
                                 mamba_bin = "mamba",
-                                stdout = TRUE,
-                                stderr = TRUE,
+                                log_file = tempfile(fileext = ".log"),
                                 check_env = TRUE) {
   if (isTRUE(check_env)) {
     .check_mamba_env(mamba_env, mamba_bin)
   }
 
   call <- .build_mamba_run_call(script, script_args, mamba_env, mamba_bin)
-  out <- system2(
-    call$command, args = call$args,
-    stdout = stdout, stderr = stderr
-  )
-  status <- attr(out, "status")
-  if (is.null(status)) status <- 0L
-  log <- if (is.character(out)) out else character(0)
 
-  if (status != 0L) {
+  message(
+    "chorus script log: ", log_file,
+    " (tail -f it from another terminal to watch progress)"
+  )
+
+  status <- system2(
+    call$command, args = call$args,
+    stdout = log_file, stderr = log_file
+  )
+  if (is.null(status)) status <- 0L
+
+  log <- if (file.exists(log_file)) readLines(log_file, warn = FALSE) else character(0)
+
+  if (!identical(as.integer(status), 0L)) {
     tail_n <- min(length(log), 20L)
     warning(
       "chorus script failed (exit status ", status, "): ",
       call$command, " ", paste(call$args, collapse = " "),
-      "\nLast ", tail_n, " line(s) of output:\n",
+      "\nLast ", tail_n, " line(s) of output (full log: ", log_file, "):\n",
       paste(utils::tail(log, tail_n), collapse = "\n"),
       call. = FALSE
     )
   }
 
   list(
-    status = status,
+    status = as.integer(status),
     stdout = log,
     stderr = character(0),
     command = call$command,
-    args = call$args
+    args = call$args,
+    log_file = log_file
   )
 }

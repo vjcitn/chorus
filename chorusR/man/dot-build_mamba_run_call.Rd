@@ -22,7 +22,12 @@ mQTL-scoring scripts themselves only need the base environment
 because they call oracles with \code{use_environment=True}, which spawns
 the oracle-specific environment as a subprocess internally).}
 
-\item{mamba_bin}{Name or path of the mamba/conda executable.}
+\item{mamba_bin}{Name or path of the mamba/conda executable.
+\code{--no-capture-output} (which must come before \code{-n}, not after -- \verb{mamba run -n <env> --no-capture-output ...} dies with \verb{exec: --: invalid option}) and \code{python -u} (unbuffered) together defeat two layers of
+output buffering that would otherwise silently hide progress until the
+whole script exits: \verb{mamba run}/\verb{conda run} buffer the child's stdout
+by default, and Python itself buffers stdout when it isn't attached to
+a terminal (as it isn't here, invoked via \code{system2()}).}
 }
 \value{
 A list with \code{command} (the executable to run) and \code{args}

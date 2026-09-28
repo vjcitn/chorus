@@ -9,8 +9,7 @@
   script_args,
   mamba_env = "chorus",
   mamba_bin = "mamba",
-  stdout = TRUE,
-  stderr = TRUE,
+  log_file = tempfile(fileext = ".log"),
   check_env = TRUE
 )
 }
@@ -25,23 +24,31 @@ in. Defaults to \code{"chorus"} (the base environment); see
 
 \item{mamba_bin}{Name or path of the mamba/conda executable.}
 
-\item{stdout, stderr}{Passed through to \code{\link[base:system2]{base::system2()}}; default
-\code{TRUE} for both, which per \code{system2()}'s own semantics merges stderr
-into the captured stdout character vector (so \code{stderr} in the
-returned value is always empty in that default case).}
+\item{log_file}{Path to write the child's combined stdout+stderr to,
+live, as it runs. Defaults to a fresh temp file; pass a stable path
+to keep it around after the call returns.}
 
 \item{check_env}{Logical; run \code{\link[=.check_mamba_env]{.check_mamba_env()}} first. Default
 \code{TRUE}; set \code{FALSE} only if the caller already checked (or is a test
 that wants to bypass it).}
 }
 \value{
-A list with \code{status} (integer exit code), \code{stdout} (character
-vector, combined stdout+stderr by default), \code{stderr} (character
-vector, only populated if \code{stderr} was given as a file path rather
-than \code{TRUE}), \code{command}, and \code{args} (the invocation actually run,
-useful for debugging a failure).
+A list with \code{status} (integer exit code), \code{stdout} (the
+contents of \code{log_file}, read back in as a character vector once the
+script exits), \code{stderr} (always empty; stderr is merged into
+\code{log_file}/\code{stdout}), \code{command}, \code{args} (the invocation actually
+run, useful for debugging a failure), and \code{log_file} (the path
+itself).
 }
 \description{
-Run a chorus Python script via system2() and capture its output
+Redirects the child's combined stdout+stderr to \code{log_file} on disk
+rather than capturing it only in memory, and only after the script
+exits. Long chorus scoring runs (each row can be a multi-minute model
+forward pass) print progress as they go -- see
+\code{\link[=.build_mamba_run_call]{.build_mamba_run_call()}} for how that reaches the log file
+unbuffered -- and writing straight to disk means that progress is
+visible (\verb{tail -f log_file} from another terminal) and preserved even
+if this R session is killed while \code{system2()} is still blocked on the
+child.
 }
 \keyword{internal}

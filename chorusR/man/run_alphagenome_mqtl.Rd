@@ -10,6 +10,7 @@ run_alphagenome_mqtl(
   flip_beta = FALSE,
   device = "cpu",
   cell_types = NULL,
+  resume = FALSE,
   repo_dir = chorus_repo_dir(),
   mamba_env = "chorus",
   mamba_bin = "mamba"
@@ -35,6 +36,13 @@ everywhere), \code{"gpu"}, or \code{"cuda"}.}
 score against; \code{NULL} (default) uses the script's built-in default
 panel (monocyte, CD4+/CD8+ T cell, B cell, neutrophil, PBMC).}
 
+\item{resume}{Logical; if \code{TRUE} and \code{output} already has rows (e.g.
+from a run that was interrupted), skip mqtl_ids already scored there
+and append only the rest, instead of overwriting \code{output} from
+scratch. Only useful with a stable (non-default, non-tempfile)
+\code{output} path, since a resumed run needs to find the same file the
+earlier run wrote to.}
+
 \item{repo_dir}{Chorus repository checkout; defaults to
 \code{\link[=chorus_repo_dir]{chorus_repo_dir()}}.}
 
@@ -47,8 +55,15 @@ own environment as a subprocess via \code{use_environment=True}).}
 \value{
 A list with \code{status} (integer exit code from the script),
 \code{log} (character vector of the script's combined stdout/stderr, for
-troubleshooting a nonzero \code{status}), \code{output} (path to the results
-CSV), and \code{results} (that CSV read in as a data frame, or \code{NULL} if
+troubleshooting a nonzero \code{status}), \code{log_file} (path to that same
+log on disk, written live as the script runs -- each mQTL is scored
+in a separate multi-minute model call, so \verb{tail -f log_file} from
+another terminal shows progress in real time, and the file survives
+even if this R session is interrupted), \code{output} (path to the
+results CSV, itself written incrementally one mQTL at a time rather
+than only at the end, so a crash or interrupt only loses the row in
+progress -- rerun with \code{resume = TRUE} to pick up where it left
+off), and \code{results} (that CSV read in as a data frame, or \code{NULL} if
 the script did not exit successfully).
 }
 \description{

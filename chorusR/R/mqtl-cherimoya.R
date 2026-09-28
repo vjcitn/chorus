@@ -39,6 +39,12 @@
 #'   mqtl's full-resolution ref/alt predicted signal as BedGraph files
 #'   there (one pair per mqtl x track) via the script's
 #'   `--save-bedgraph` option. Off by default.
+#' @param resume Logical; if `TRUE` and `output` already has rows (e.g.
+#'   from a run that was interrupted), skip (mqtl_id, track_id) pairs
+#'   already scored there and append only the rest, instead of
+#'   overwriting `output` from scratch. Only useful with a stable
+#'   (non-default, non-tempfile) `output` path, since a resumed run needs
+#'   to find the same file the earlier run wrote to.
 #' @param repo_dir Chorus repository checkout; defaults to
 #'   [chorus_repo_dir()].
 #' @param mamba_env Conda/mamba environment to run the script in; default
@@ -48,9 +54,17 @@
 #'
 #' @return A list with `status` (integer exit code from the script),
 #'   `log` (character vector of the script's combined stdout/stderr,
-#'   including any window-filter or track-resolution warnings), `output`
-#'   (path to the results CSV), and `results` (that CSV read in as a data
-#'   frame, or `NULL` if the script did not exit successfully).
+#'   including any window-filter or track-resolution warnings), `log_file`
+#'   (path to that same log on disk, written live as the script runs --
+#'   Cherimoya loads one track/biosample at a time and scores every mQTL
+#'   against it before moving to the next, so `tail -f log_file` from
+#'   another terminal shows progress in real time, and the file survives
+#'   even if this R session is interrupted), `output` (path to the
+#'   results CSV, itself written incrementally one (mqtl, track) pair at
+#'   a time rather than only at the end, so a crash or interrupt only
+#'   loses the row in progress -- rerun with `resume = TRUE` to pick up
+#'   where it left off), and `results` (that CSV read in as a data frame,
+#'   or `NULL` if the script did not exit successfully).
 #' @export
 #' @examples
 #' # Requires the CHORUS_REPO_DIR environment variable to point at a
@@ -68,6 +82,7 @@ run_cherimoya_mqtl <- function(mqtl_csv,
                                 biosamples = NULL,
                                 assays = NULL,
                                 save_bedgraph = NULL,
+                                resume = FALSE,
                                 repo_dir = chorus_repo_dir(),
                                 mamba_env = "chorus",
                                 mamba_bin = "mamba") {
@@ -86,6 +101,7 @@ run_cherimoya_mqtl <- function(mqtl_csv,
   if (!is.null(biosamples)) args <- c(args, "--biosamples", biosamples)
   if (!is.null(assays)) args <- c(args, "--assays", assays)
   if (!is.null(save_bedgraph)) args <- c(args, "--save-bedgraph", save_bedgraph)
+  if (isTRUE(resume)) args <- c(args, "--resume")
 
   run <- .run_chorus_script(script, args, mamba_env = mamba_env,
                              mamba_bin = mamba_bin)
@@ -98,6 +114,7 @@ run_cherimoya_mqtl <- function(mqtl_csv,
   list(
     status = run$status,
     log = run$stdout,
+    log_file = run$log_file,
     output = output,
     results = results
   )

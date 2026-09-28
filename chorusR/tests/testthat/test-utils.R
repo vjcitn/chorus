@@ -3,8 +3,8 @@ test_that(".build_mamba_run_call assembles the mamba/conda invocation", {
   expect_equal(call$command, "mamba")
   expect_equal(
     call$args,
-    c("run", "-n", "chorus", "python", "score_mqtls.py",
-      "in.csv", "-o", "out.csv")
+    c("run", "--no-capture-output", "-n", "chorus", "python", "-u",
+      "score_mqtls.py", "in.csv", "-o", "out.csv")
   )
 })
 
@@ -12,7 +12,17 @@ test_that(".build_mamba_run_call respects mamba_env and mamba_bin", {
   call <- .build_mamba_run_call("s.py", "x", mamba_env = "myenv",
                                  mamba_bin = "conda")
   expect_equal(call$command, "conda")
-  expect_equal(call$args[1:3], c("run", "-n", "myenv"))
+  expect_equal(call$args[1:4], c("run", "--no-capture-output", "-n", "myenv"))
+})
+
+test_that(".build_mamba_run_call puts --no-capture-output before -n", {
+  # `mamba run -n <env> --no-capture-output ...` dies with
+  # "exec: --: invalid option" -- the flag must come first.
+  call <- .build_mamba_run_call("s.py", "x")
+  expect_equal(which(call$args == "--no-capture-output"),
+               which(call$args == "run") + 1)
+  expect_true(which(call$args == "--no-capture-output") <
+                which(call$args == "-n"))
 })
 
 test_that(".build_mamba_run_call validates its inputs", {
@@ -157,7 +167,7 @@ test_that(".run_chorus_script runs the preflight check by default", {
     .check_mamba_env = function(...) stop("preflight check ran")
   )
   expect_error(
-    .run_chorus_script("s.py", "x"),
+    suppressMessages(.run_chorus_script("s.py", "x")),
     "preflight check ran"
   )
 })
@@ -167,29 +177,48 @@ test_that(".run_chorus_script skips the preflight check when check_env = FALSE",
     .check_mamba_env = function(...) stop("preflight check should not run")
   )
   local_mocked_bindings(
-    system2 = function(...) {
-      out <- "ok"
-      attr(out, "status") <- 0L
-      out
+    system2 = function(command, args, stdout, stderr, ...) {
+      writeLines("ok", stdout)
+      0L
     },
     .package = "base"
   )
-  run <- .run_chorus_script("s.py", "x", check_env = FALSE)
+  run <- suppressMessages(
+    .run_chorus_script("s.py", "x", check_env = FALSE)
+  )
   expect_equal(run$status, 0L)
+  expect_equal(run$stdout, "ok")
+})
+
+test_that(".run_chorus_script writes a live log file the caller can tail", {
+  local_mocked_bindings(.check_mamba_env = function(...) TRUE)
+  local_mocked_bindings(
+    system2 = function(command, args, stdout, stderr, ...) {
+      writeLines("ok", stdout)
+      0L
+    },
+    .package = "base"
+  )
+  log_file <- tempfile(fileext = ".log")
+  run <- suppressMessages(
+    .run_chorus_script("s.py", "x", log_file = log_file)
+  )
+  expect_equal(run$log_file, log_file)
+  expect_true(file.exists(log_file))
+  expect_equal(readLines(log_file), "ok")
 })
 
 test_that(".run_chorus_script warns (but does not error) on a nonzero exit status", {
   local_mocked_bindings(.check_mamba_env = function(...) TRUE)
   local_mocked_bindings(
-    system2 = function(...) {
-      out <- c("Traceback (most recent call last):", "ModuleNotFoundError")
-      attr(out, "status") <- 1L
-      out
+    system2 = function(command, args, stdout, stderr, ...) {
+      writeLines(c("Traceback (most recent call last):", "ModuleNotFoundError"), stdout)
+      1L
     },
     .package = "base"
   )
   expect_warning(
-    run <- .run_chorus_script("s.py", "x"),
+    run <- suppressMessages(.run_chorus_script("s.py", "x")),
     "chorus script failed"
   )
   expect_equal(run$status, 1L)
