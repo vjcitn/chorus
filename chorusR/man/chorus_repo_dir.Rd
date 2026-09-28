@@ -26,8 +26,7 @@ file).
 }
 }
 \examples{
-\dontrun{
-options(chorusR.repo_dir = "/path/to/your/chorus/checkout")
+# Requires the CHORUS_REPO_DIR environment variable to point at a
+# chorus repository checkout.
 chorus_repo_dir()
-}
 }

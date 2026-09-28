@@ -53,20 +53,14 @@
 #'   frame, or `NULL` if the script did not exit successfully).
 #' @export
 #' @examples
-#' \donttest{
-#' # Requires a chorus repository checkout, mamba/conda, and the
-#' # chorus-cherimoya environment. Point chorus_repo_dir() at your
-#' # checkout first, e.g. options(chorusR.repo_dir = "/path/to/chorus")
-#' # or Sys.setenv(CHORUS_REPO_DIR = "/path/to/chorus") -- this example
-#' # is a no-op if neither is set, so it's safe to run as-is. Two of the
-#' # four bundled example rows are farther apart than Cherimoya's window
-#' # and will be dropped with a WARNING: see chorus_example_mqtls_path().
-#' if (!is.null(getOption("chorusR.repo_dir")) ||
-#'     nzchar(Sys.getenv("CHORUS_REPO_DIR"))) {
-#'   res <- run_cherimoya_mqtl(chorus_example_mqtls_path())
-#'   head(res$results)
-#' }
-#' }
+#' # Requires the CHORUS_REPO_DIR environment variable to point at a
+#' # chorus repository checkout, and mamba/conda with the
+#' # chorus-cherimoya environment set up (see chorus_repo_dir()). Two of
+#' # the four bundled example rows are farther apart than Cherimoya's
+#' # window and will be dropped with a WARNING: see
+#' # chorus_example_mqtls_path().
+#' res <- run_cherimoya_mqtl(chorus_example_mqtls_path())
+#' head(res$results)
 run_cherimoya_mqtl <- function(mqtl_csv,
                                 output = tempfile(fileext = ".csv"),
                                 flip_beta = FALSE,

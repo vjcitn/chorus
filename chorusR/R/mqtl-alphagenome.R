@@ -41,18 +41,11 @@
 #'   the script did not exit successfully).
 #' @export
 #' @examples
-#' \donttest{
-#' # Requires a chorus repository checkout, mamba/conda, and the
-#' # chorus-alphagenome environment. Point chorus_repo_dir() at your
-#' # checkout first, e.g. options(chorusR.repo_dir = "/path/to/chorus")
-#' # or Sys.setenv(CHORUS_REPO_DIR = "/path/to/chorus") -- this example
-#' # is a no-op if neither is set, so it's safe to run as-is.
-#' if (!is.null(getOption("chorusR.repo_dir")) ||
-#'     nzchar(Sys.getenv("CHORUS_REPO_DIR"))) {
-#'   res <- run_alphagenome_mqtl(chorus_example_mqtls_path())
-#'   head(res$results)
-#' }
-#' }
+#' # Requires the CHORUS_REPO_DIR environment variable to point at a
+#' # chorus repository checkout, and mamba/conda with the
+#' # chorus-alphagenome environment set up (see chorus_repo_dir()).
+#' res <- run_alphagenome_mqtl(chorus_example_mqtls_path())
+#' head(res$results)
 run_alphagenome_mqtl <- function(mqtl_csv,
                                   output = tempfile(fileext = ".csv"),
                                   flip_beta = FALSE,

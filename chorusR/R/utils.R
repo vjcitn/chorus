@@ -15,10 +15,9 @@
 #' @return A normalized path to the chorus repository checkout.
 #' @export
 #' @examples
-#' \dontrun{
-#' options(chorusR.repo_dir = "/path/to/your/chorus/checkout")
+#' # Requires the CHORUS_REPO_DIR environment variable to point at a
+#' # chorus repository checkout.
 #' chorus_repo_dir()
-#' }
 chorus_repo_dir <- function() {
   opt <- getOption("chorusR.repo_dir")
   if (!is.null(opt)) {
