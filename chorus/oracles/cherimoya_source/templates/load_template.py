@@ -46,28 +46,6 @@ elif device == "gpu":
 else:
     resolved = device
 
-# Cherimoya.load's internal torch.load() call does not pass map_location,
-# so it restores tensors to whatever device tag is embedded in the
-# checkpoint file -- "cuda:0" for every CATv1 checkpoint shipped so far,
-# since they were all saved on a GPU machine. On a CPU-only host that
-# raises "Attempting to deserialize object on a CUDA device but
-# torch.cuda.is_available() is False" from deep inside
-# torch/serialization.py, before `device=` (below) ever gets a chance to
-# move anything -- device= only controls where the model is placed AFTER
-# a successful load. Patching torch.load's default here (not passed
-# explicitly by the caller) forces the restore to land on `resolved`
-# regardless of what the checkpoint was saved on. Safe globally: this
-# template runs in its own fresh subprocess per call.
-_orig_torch_load = torch.load
-
-
-def _torch_load_with_default_map_location(*load_args, **load_kwargs):
-    load_kwargs.setdefault("map_location", resolved)
-    return _orig_torch_load(*load_args, **load_kwargs)
-
-
-torch.load = _torch_load_with_default_map_location
-
 # compile=False is mandatory here, not a preference.  Cherimoya.load
 # defaults to compile=True with compile_mode='max-autotune', and this
 # template runs in a *fresh subprocess on every predict call* -- so a

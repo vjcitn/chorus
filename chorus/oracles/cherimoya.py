@@ -367,36 +367,17 @@ class CherimoyaOracle(OracleBase):
         elif device == "gpu":
             device = "cuda"
 
-        # Cherimoya.load's internal torch.load() call omits map_location,
-        # so it restores tensors to the checkpoint's embedded device tag
-        # ("cuda:0" for every CATv1 checkpoint shipped so far) rather than
-        # `device` above. On a CPU-only host that raises "Attempting to
-        # deserialize object on a CUDA device but torch.cuda.is_available()
-        # is False" before `device=` ever gets applied. Scoped to just this
-        # call (unlike the *_template.py subprocess copies of this same
-        # workaround, which patch for the process's whole lifetime) since
-        # this path runs in-process and must not affect unrelated torch.load
-        # calls elsewhere in the interpreter.
-        _orig_torch_load = torch.load
-
-        def _torch_load_with_default_map_location(*load_args, **load_kwargs):
-            load_kwargs.setdefault("map_location", device)
-            return _orig_torch_load(*load_args, **load_kwargs)
-
         try:
             # compile=False is mandatory: Cherimoya.load defaults to
             # compile=True with mode='max-autotune', which would add a
             # multi-minute warmup per model -- ruinous for the background
             # build, which loads 1,518 of them.
-            torch.load = _torch_load_with_default_map_location
             model = Cherimoya.load(weights, device=device, compile=False)
             self.model = model.eval()
         except Exception as exc:
             raise ModelNotLoadedError(
                 f"Failed to load Cherimoya model from {weights}: {exc}"
             ) from exc
-        finally:
-            torch.load = _orig_torch_load
 
         self._check_geometry(
             trimming=int(self.model.trimming),

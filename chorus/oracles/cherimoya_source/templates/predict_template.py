@@ -55,22 +55,6 @@ elif device == "gpu":
 else:
     resolved = device
 
-# See the matching note in load_template.py: Cherimoya.load's internal
-# torch.load() call omits map_location, so on a CPU-only host it tries to
-# restore the checkpoint's embedded "cuda:0" tag and dies in
-# torch/serialization.py before device= below ever runs. Force the
-# restore target explicitly; safe globally since this template is a
-# fresh subprocess per call.
-_orig_torch_load = torch.load
-
-
-def _torch_load_with_default_map_location(*load_args, **load_kwargs):
-    load_kwargs.setdefault("map_location", resolved)
-    return _orig_torch_load(*load_args, **load_kwargs)
-
-
-torch.load = _torch_load_with_default_map_location
-
 windows = args["windows"]
 batch_size = args.get("batch_size", 64)
 
