@@ -136,8 +136,11 @@ def score_one_mqtl(oracle, row, norm, window_bins=2, bedgraph_dir=None):
             scoring_strategy="mean",
         )
 
-    alt_allele_name = row["alt"]
-    effect = scores[alt_allele_name][track_id]["effect"]
+    # score_variant_effect() keys its return dict by "alt_1", "alt_2", ...
+    # (chorus/core/base.py: `intervals[f'alt_{i+1}'] = ...`), never by the
+    # literal allele letter. Exactly one alt allele is ever passed above, so
+    # the key is always "alt_1".
+    effect = scores["alt_1"][track_id]["effect"]
     eff_pct = norm.effect_percentile("cherimoya", track_id, abs(effect), signed=False)
     # Accessibility is an "active" mark: more signal -> less methylation.
     concordant = np.sign(effect) == np.sign(-row["beta"])

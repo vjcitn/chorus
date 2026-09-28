@@ -170,8 +170,11 @@ def score_one_mqtl(oracle, row, assay_ids, norm, window_bins=2):
         )
 
     out_rows = []
-    alt_allele_name = row["alt"]
-    for assay_id, per_track in scores[alt_allele_name].items():
+    # score_variant_effect() keys its return dict by "alt_1", "alt_2", ...
+    # (chorus/core/base.py: `intervals[f'alt_{i+1}'] = ...`), never by the
+    # literal allele letter. Exactly one alt allele is ever passed above, so
+    # the key is always "alt_1".
+    for assay_id, per_track in scores["alt_1"].items():
         effect = per_track["effect"]
         expected_dir = assay_ids[assay_id]  # +1 or -1
         eff_pct = norm.effect_percentile(
