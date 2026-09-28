@@ -85,12 +85,16 @@ Unlike AlphaGenome, Cherimoya has no bf16 tensor-core dependency, so
 \examples{
 \donttest{
 # Requires a chorus repository checkout, mamba/conda, and the
-# chorus-cherimoya environment (see chorus_repo_dir()) -- not run
-# during automated checks. Two of the four bundled example rows are
-# farther apart than Cherimoya's window and will be dropped with a
-# WARNING: see chorus_example_mqtls_path().
-options(chorusR.repo_dir = "~/CHORUS/chorus")
-res <- run_cherimoya_mqtl(chorus_example_mqtls_path())
-head(res$results)
+# chorus-cherimoya environment. Point chorus_repo_dir() at your
+# checkout first, e.g. options(chorusR.repo_dir = "/path/to/chorus")
+# or Sys.setenv(CHORUS_REPO_DIR = "/path/to/chorus") -- this example
+# is a no-op if neither is set, so it's safe to run as-is. Two of the
+# four bundled example rows are farther apart than Cherimoya's window
+# and will be dropped with a WARNING: see chorus_example_mqtls_path().
+if (!is.null(getOption("chorusR.repo_dir")) ||
+    nzchar(Sys.getenv("CHORUS_REPO_DIR"))) {
+  res <- run_cherimoya_mqtl(chorus_example_mqtls_path())
+  head(res$results)
+}
 }
 }

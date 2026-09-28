@@ -16,7 +16,7 @@
 #' @export
 #' @examples
 #' \dontrun{
-#' options(chorusR.repo_dir = "~/CHORUS/chorus")
+#' options(chorusR.repo_dir = "/path/to/your/chorus/checkout")
 #' chorus_repo_dir()
 #' }
 chorus_repo_dir <- function() {
