@@ -50,6 +50,37 @@ DEFAULT_CELL_TYPES = [
 ]
 
 
+def print_provenance_banner(script_path):
+    """Print what's actually running: chorus package version, the exact
+    script file (this repo checkout may be ahead of or behind whatever a
+    fix was tested against), its git commit if this is a git checkout,
+    and chorusR's version if invoked from chorusR (via CHORUSR_VERSION).
+
+    chorusR shells out to this script rather than vendoring it, so the
+    two can silently diverge; a log that doesn't say what ran makes every
+    bug report ambiguous about whether it's already fixed.
+    """
+    import subprocess
+
+    print(f"chorus package version: {chorus.__version__}", flush=True)
+    print(f"script: {os.path.abspath(script_path)}", flush=True)
+
+    repo_dir = os.path.dirname(os.path.abspath(script_path))
+    try:
+        commit = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=repo_dir, capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+        print(f"chorus repo commit: {commit}", flush=True)
+    except Exception:
+        print("chorus repo commit: unknown (not a git checkout, or git unavailable)",
+              flush=True)
+
+    chorusr_version = os.environ.get("CHORUSR_VERSION")
+    if chorusr_version:
+        print(f"chorusR version: {chorusr_version}", flush=True)
+
+
 def load_existing_keys(output_path, key_cols):
     """For --resume: the set of key_cols tuples (or, for a single key
     column, bare values) already present in an existing output file, so
@@ -225,6 +256,8 @@ def main():
                           "this flag, --output is overwritten from "
                           "scratch, as before.")
     args = ap.parse_args()
+
+    print_provenance_banner(__file__)
 
     mqtls = load_mqtl_table(args.mqtl_csv, flip_beta=args.flip_beta)
     print(f"Loaded {len(mqtls)} SNP-CpG pairs", flush=True)

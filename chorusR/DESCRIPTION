@@ -1,6 +1,6 @@
 Package: chorusR
 Title: R Wrappers Around the 'chorus' Genomic Oracle Toolkit
-Version: 0.0.5
+Version: 0.0.6
 Authors@R: person("Vincent", "Carey", email = "stvjc@channing.harvard.edu",
     role = c("aut", "cre"))
 Description: Thin R wrappers that drive the Python 'chorus' package

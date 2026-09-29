@@ -255,6 +255,22 @@ chorus_repo_dir <- function() {
   python_bin <- .resolve_env_python(mamba_env, mamba_bin)
   call <- .build_python_call(python_bin, script, script_args)
 
+  # chorusR shells out to a script living in a *separate* chorus repository
+  # checkout rather than vendoring it, so "which version of chorusR" and
+  # "which chorus commit is score_mqtls*.py actually running from" can
+  # silently diverge -- e.g. this checkout ahead of or behind the one a fix
+  # was tested against. Passed through as an env var (not a script_args
+  # entry) so it reaches the log via the script's own startup banner
+  # without changing either script's argument parsing.
+  chorusr_version <- tryCatch(
+    as.character(utils::packageVersion("chorusR")),
+    error = function(e) "unknown (not installed as a package)"
+  )
+  message(
+    "chorusR version: ", chorusr_version,
+    " | python: ", call$command,
+    " | script: ", script
+  )
   message(
     "chorus script log: ", log_file,
     " (tail -f it from another terminal to watch progress)"
@@ -262,7 +278,8 @@ chorus_repo_dir <- function() {
 
   status <- system2(
     call$command, args = call$args,
-    stdout = log_file, stderr = log_file
+    stdout = log_file, stderr = log_file,
+    env = paste0("CHORUSR_VERSION=", chorusr_version)
   )
   if (is.null(status)) status <- 0L
 

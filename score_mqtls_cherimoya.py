@@ -43,7 +43,10 @@ from chorus.analysis.normalization import get_pertrack_normalizer
 from chorus.oracles.cherimoya_source.catv1_globals import CATV1_INPUT_LENGTH
 from chorus.oracles.cherimoya_source.catv1_metadata import get_metadata
 
-from score_mqtls import load_mqtl_table, load_existing_keys, append_checkpoint
+from score_mqtls import (
+    load_mqtl_table, load_existing_keys, append_checkpoint,
+    print_provenance_banner,
+)
 
 # Biosamples confirmed present in CATv1-metadata.tsv. Cherimoya's atlas has
 # no neutrophil, PBMC, or generic "blood" biosample term, unlike
@@ -188,6 +191,8 @@ def main():
                           "rest. Without this flag, --output is "
                           "overwritten from scratch, as before.")
     args = ap.parse_args()
+
+    print_provenance_banner(__file__)
 
     mqtls = load_mqtl_table(args.mqtl_csv, flip_beta=args.flip_beta)
     print(f"Loaded {len(mqtls)} SNP-CpG pairs", flush=True)
