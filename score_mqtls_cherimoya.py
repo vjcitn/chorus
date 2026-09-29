@@ -31,6 +31,7 @@ methylation measurement.
 import argparse
 import os
 import sys
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -244,7 +245,11 @@ def main():
                     args.output, [result_row], header_written
                 )
             except Exception as exc:
+                # A bare str(exc) reads as a data problem for a KeyError
+                # (e.g. "FAILED: 'A'") and gives no way to tell which line
+                # raised it. The full traceback costs nothing.
                 print(f"    FAILED: {exc}", file=sys.stderr, flush=True)
+                traceback.print_exc(file=sys.stderr)
 
     result = (
         pd.read_csv(args.output) if os.path.exists(args.output) else pd.DataFrame()
